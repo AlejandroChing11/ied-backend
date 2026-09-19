@@ -1,0 +1,12 @@
+import { Module } from '@nestjs/common';
+import { UsuariosModule } from '../usuarios/usuarios.module';
+import { MatriculasController } from './matriculas.controller';
+import { MatriculasService } from './matriculas.service';
+
+@Module({
+  imports: [UsuariosModule],
+  controllers: [MatriculasController],
+  providers: [MatriculasService],
+  exports: [MatriculasService],
+})
+export class MatriculasModule {}
