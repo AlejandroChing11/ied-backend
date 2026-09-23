@@ -20,6 +20,7 @@ import { AuditoriaModule } from './auditoria/auditoria.module';
 import { ArchivosModule } from './archivos/archivos.module';
 import { ConfiguracionModule } from './configuracion/configuracion.module';
 import { HistorialModule } from './historial/historial.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -43,6 +44,7 @@ import { HealthController } from './health.controller';
     ArchivosModule,
     ExcusasModule,
     ConvivenciaModule,
+    DashboardModule,
   ],
   controllers: [HealthController],
   providers: [
