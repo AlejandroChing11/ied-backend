@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../config/supabase.service';
-import { PERMISSION } from '../common/constants';
+import { ENTIDAD_ARCHIVO, PERMISSION, ROLE } from '../common/constants';
 import { AuthUser, hasPermission } from '../common/types';
 import { throwOnError } from '../common/supabase.util';
 
@@ -32,15 +32,25 @@ export class ArchivosService {
     user: AuthUser;
   }) {
     if (!params.file) throw new BadRequestException('Archivo requerido');
+    if (
+      params.entidadTipo !== ENTIDAD_ARCHIVO.EXCUSA &&
+      params.entidadTipo !== ENTIDAD_ARCHIVO.SITUACION_CONVIVENCIA
+    ) {
+      throw new BadRequestException('entidadTipo no permitido');
+    }
+    if (!Number.isInteger(params.entidadId) || params.entidadId <= 0) {
+      throw new BadRequestException('entidadId inválido');
+    }
     if (!ALLOWED_MIME.has(params.file.mimetype)) {
       throw new BadRequestException('Tipo de archivo no permitido');
     }
     if (params.file.size > MAX_BYTES) {
       throw new BadRequestException('El archivo supera 8 MB');
     }
+    await this.assertPuedeAccederEntidad(params.entidadTipo, params.entidadId, params.user);
 
     const bucket =
-      params.entidadTipo === 'EXCUSA' ? 'excusas' : 'convivencia';
+      params.entidadTipo === ENTIDAD_ARCHIVO.EXCUSA ? 'excusas' : 'convivencia';
     const nombreTecnico = `${randomUUID()}-${params.file.originalname.replace(/\s+/g, '_')}`;
     const path = `${params.entidadId}/${nombreTecnico}`;
 
@@ -51,7 +61,7 @@ export class ArchivosService {
         upsert: false,
       });
     if (storageError) {
-      throw new BadRequestException(storageError.message);
+      throw new BadRequestException('No se pudo guardar el archivo');
     }
 
     const { data, error } = await this.supabase
@@ -92,6 +102,7 @@ export class ArchivosService {
     throwOnError(error);
     if (!data) throw new NotFoundException('Archivo no encontrado');
     const row = data as any;
+    await this.assertPuedeAccederEntidad(row.entidad_tipo, row.entidad_id, user);
     if (row.es_confidencial && !hasPermission(user, PERMISSION.ARCHIVO_READ_CONFIDENCIAL)) {
       throw new ForbiddenException('No puede descargar archivos confidenciales');
     }
@@ -130,5 +141,55 @@ export class ArchivosService {
     const del = await this.supabase.from('archivo').delete().eq('id', id);
     throwOnError(del.error);
     return { deleted: true };
+  }
+
+  private async assertPuedeAccederEntidad(
+    entidadTipo: string,
+    entidadId: number,
+    user: AuthUser,
+  ) {
+    if (entidadTipo === ENTIDAD_ARCHIVO.EXCUSA) {
+      const { data, error } = await this.supabase
+        .from('excusa')
+        .select('id, id_estudiante')
+        .eq('id', entidadId)
+        .maybeSingle();
+      throwOnError(error);
+      if (!data) throw new NotFoundException('Excusa no encontrada');
+      const row = data as { id_estudiante: number };
+      if (user.rol === ROLE.ESTUDIANTE && row.id_estudiante !== user.id) {
+        throw new ForbiddenException('No puede acceder a este archivo');
+      }
+      if (user.rol === ROLE.ACUDIENTE) {
+        const vinculo = await this.supabase
+          .from('acudiente_estudiante')
+          .select('id')
+          .eq('id_acudiente', user.id)
+          .eq('id_estudiante', row.id_estudiante)
+          .maybeSingle();
+        throwOnError(vinculo.error);
+        if (!vinculo.data) throw new ForbiddenException('No puede acceder a este archivo');
+      }
+      return;
+    }
+
+    if (entidadTipo === ENTIDAD_ARCHIVO.SITUACION_CONVIVENCIA) {
+      if (
+        !hasPermission(user, PERMISSION.CONVIVENCIA_VER) &&
+        !hasPermission(user, PERMISSION.CONVIVENCIA_REPORTAR)
+      ) {
+        throw new ForbiddenException('No puede acceder a este archivo');
+      }
+      const { data, error } = await this.supabase
+        .from('situacion_convivencia')
+        .select('id')
+        .eq('id', entidadId)
+        .maybeSingle();
+      throwOnError(error);
+      if (!data) throw new NotFoundException('Situación no encontrada');
+      return;
+    }
+
+    throw new BadRequestException('entidadTipo no permitido');
   }
 }

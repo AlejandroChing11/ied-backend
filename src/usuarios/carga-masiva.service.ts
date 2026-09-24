@@ -1,9 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { parse } from 'csv-parse/sync';
-import { SupabaseService } from '../config/supabase.service';
+import { neutralizeCsvCell } from '../common/csv-safe';
 import { ROLE } from '../common/constants';
 import { throwOnError } from '../common/supabase.util';
+import { SupabaseService } from '../config/supabase.service';
 import { UsuariosService } from './usuarios.service';
+
+const MAX_CSV_ROWS = 200;
 
 export interface CsvRowResult {
   line: number;
@@ -31,19 +35,22 @@ export class CargaMasivaService {
     } catch {
       throw new BadRequestException('El CSV no se pudo leer');
     }
+    if (records.length > MAX_CSV_ROWS) {
+      throw new BadRequestException(`El CSV no puede tener más de ${MAX_CSV_ROWS} filas`);
+    }
 
     const idRol = await this.usuarios.findRolIdByNombre(ROLE.ESTUDIANTE);
     const resultados: CsvRowResult[] = [];
 
     for (const [index, row] of records.entries()) {
       const line = index + 2;
-      const anio = row.Año ?? row.anio ?? row.Ano ?? '';
-      const idCursoLabel = row.idCurso ?? row.curso ?? '';
-      const usuario = row.Usuario ?? row.usuario ?? '';
-      const identificacion = row['Identificación'] ?? row.identificacion ?? '';
-      const apellidos = row.Apellidos ?? row.apellidos ?? '';
-      const nombres = row.Nombres ?? row.nombres ?? '';
-      const email = row['E-Mail'] ?? row.email ?? row.Email ?? '';
+      const anio = neutralizeCsvCell(row.Año ?? row.anio ?? row.Ano ?? '');
+      const idCursoLabel = neutralizeCsvCell(row.idCurso ?? row.curso ?? '');
+      const usuario = neutralizeCsvCell(row.Usuario ?? row.usuario ?? '');
+      const identificacion = neutralizeCsvCell(row['Identificación'] ?? row.identificacion ?? '');
+      const apellidos = neutralizeCsvCell(row.Apellidos ?? row.apellidos ?? '');
+      const nombres = neutralizeCsvCell(row.Nombres ?? row.nombres ?? '');
+      const email = neutralizeCsvCell(row['E-Mail'] ?? row.email ?? row.Email ?? '');
       const snapshot = [anio, idCursoLabel, usuario, identificacion, apellidos, nombres, email]
         .filter(Boolean)
         .join(', ');
@@ -72,10 +79,11 @@ export class CargaMasivaService {
         throwOnError(curso.error);
         if (!curso.data) throw new Error(`Curso ${idCursoLabel} no existe`);
 
+        const contrasena = `Tmp.${randomBytes(9).toString('base64url')}!`;
         const created = await this.usuarios.create({
           identificacion,
           usuario,
-          contrasena: `Tmp.${identificacion}!`,
+          contrasena,
           nombre: nombres,
           apellido: apellidos,
           email,
@@ -93,7 +101,7 @@ export class CargaMasivaService {
           line,
           ok: true,
           data: snapshot,
-          reason: 'Fila importada. Usuario y matrícula creados.',
+          reason: `Fila importada. Clave temporal: ${contrasena}`,
         });
       } catch (error) {
         resultados.push({

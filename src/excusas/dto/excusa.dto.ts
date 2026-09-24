@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class CreateExcusaDto {
@@ -39,8 +39,7 @@ export class ResolverExcusaDto {
   @IsNotEmpty()
   observacionesRevision: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsIn(['Aprobada', 'Rechazada'])
   decision: 'Aprobada' | 'Rechazada';
 }
 

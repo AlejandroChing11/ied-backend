@@ -7,18 +7,24 @@ import {
 import { PostgrestError } from '@supabase/supabase-js';
 import { Paginated } from './types';
 
+function publicDbMessage(code?: string, fallback?: string) {
+  if (code === '23505') return 'Ya existe un registro con esos datos.';
+  if (code === '23503') return 'Referencia inválida.';
+  return fallback ?? 'No se pudo completar la operación.';
+}
+
 export function throwOnError(error: PostgrestError | null, fallback?: string) {
   if (!error) return;
   if (error.code === '23505') {
-    throw new ConflictException(error.message);
+    throw new ConflictException(publicDbMessage(error.code));
   }
   if (error.code === '23503') {
-    throw new BadRequestException('Referencia inválida: ' + error.message);
+    throw new BadRequestException(publicDbMessage(error.code));
   }
   if (error.code === 'PGRST116') {
     throw new NotFoundException(fallback ?? 'Registro no encontrado');
   }
-  throw new BadRequestException(error.message || fallback || 'Error de base de datos');
+  throw new BadRequestException(publicDbMessage(error.code, fallback));
 }
 
 export function unwrap<T>(

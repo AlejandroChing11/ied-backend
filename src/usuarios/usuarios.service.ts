@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from '../config/supabase.service';
 import { ESTADO, ROLE } from '../common/constants';
+import { escapePostgrestValue } from '../common/postgrest';
 import { paginateMeta, range, throwOnError, unwrap } from '../common/supabase.util';
 import { CreateUsuarioDto, ListUsuariosDto, UpdateUsuarioDto } from './dto/usuario.dto';
 import {
@@ -32,7 +33,7 @@ export class UsuariosService {
     if (query.idRol) builder = builder.eq('id_rol', query.idRol);
     if (query.idEstado) builder = builder.eq('id_estado', query.idEstado);
     if (query.q?.trim()) {
-      const q = `%${query.q.trim()}%`;
+      const q = escapePostgrestValue(`%${query.q.trim()}%`);
       builder = builder.or(
         `nombre.ilike.${q},apellido.ilike.${q},email.ilike.${q},identificacion.ilike.${q},usuario.ilike.${q}`,
       );
@@ -72,13 +73,21 @@ export class UsuariosService {
   }
 
   async findRowByUsuarioOrEmail(value: string): Promise<UsuarioRow | null> {
-    const result = await this.supabase
+    const byUsuario = await this.supabase
       .from('usuario')
       .select(USUARIO_SELECT)
-      .or(`usuario.eq.${value},email.eq.${value}`)
+      .eq('usuario', value)
       .maybeSingle();
-    throwOnError(result.error);
-    return (result.data as unknown as UsuarioRow) ?? null;
+    throwOnError(byUsuario.error);
+    if (byUsuario.data) return byUsuario.data as unknown as UsuarioRow;
+
+    const byEmail = await this.supabase
+      .from('usuario')
+      .select(USUARIO_SELECT)
+      .eq('email', value)
+      .maybeSingle();
+    throwOnError(byEmail.error);
+    return (byEmail.data as unknown as UsuarioRow) ?? null;
   }
 
   async countAll() {
@@ -134,7 +143,7 @@ export class UsuariosService {
         user_metadata: { usuario: dto.usuario },
       });
     if (authError || !authData.user) {
-      throw new ForbiddenException(authError?.message ?? 'No se pudo crear la cuenta');
+      throw new ForbiddenException('No se pudo crear la cuenta de acceso');
     }
 
     const insert = await this.supabase
@@ -185,7 +194,7 @@ export class UsuariosService {
         current.auth_id,
         authPatch,
       );
-      if (error) throw new ForbiddenException(error.message);
+      if (error) throw new ForbiddenException('No se pudo actualizar la cuenta de acceso');
     }
 
     return this.findById(id);

@@ -9,7 +9,7 @@ import { ESTADO } from '../common/constants';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { toAuthUser } from '../usuarios/usuario.mapper';
 import { AuditoriaService } from '../auditoria/auditoria.service';
-import { BootstrapDto, LoginDto, RefreshDto, RegisterDto } from './dto/auth.dto';
+import { BootstrapDto, LoginDto, RegisterDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -41,7 +41,7 @@ export class AuthService {
     if (!row) throw new UnauthorizedException('Credenciales inválidas');
     const profile = toAuthUser(row);
     if (profile.estado !== ESTADO.ACTIVO) {
-      throw new ForbiddenException('La cuenta está inactiva o bloqueada');
+      throw new UnauthorizedException('Credenciales inválidas');
     }
 
     const { data, error } = await this.supabase.anon.auth.signInWithPassword({
@@ -68,9 +68,9 @@ export class AuthService {
     };
   }
 
-  async refresh(dto: RefreshDto) {
+  async refresh(refreshToken: string) {
     const { data, error } = await this.supabase.anon.auth.refreshSession({
-      refresh_token: dto.refreshToken,
+      refresh_token: refreshToken,
     });
     if (error || !data.session || !data.user) {
       throw new UnauthorizedException('Refresh token inválido');

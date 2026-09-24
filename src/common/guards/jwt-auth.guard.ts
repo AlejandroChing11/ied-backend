@@ -24,11 +24,13 @@ export class JwtAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<{
       headers: { authorization?: string };
+      cookies?: { ied_at?: string };
       user?: unknown;
     }>();
     const header = request.headers.authorization ?? '';
-    const [scheme, token] = header.split(' ');
-    if (scheme !== 'Bearer' || !token) {
+    const [scheme, bearer] = header.split(' ');
+    const token = scheme === 'Bearer' && bearer ? bearer : request.cookies?.ied_at;
+    if (!token) {
       throw new UnauthorizedException('Token de acceso requerido');
     }
     request.user = await this.authService.validateAccessToken(token);

@@ -71,6 +71,33 @@ export class ExcusasService {
     throw new ForbiddenException('No puede radicar excusas');
   }
 
+  private async assertPuedeVer(idEstudiante: number, user: AuthUser) {
+    if (user.rol === ROLE.ADMINISTRADOR) return;
+    if (hasPermission(user, PERMISSION.EXCUSA_VER) && user.rol !== ROLE.ACUDIENTE && user.rol !== ROLE.ESTUDIANTE) {
+      return;
+    }
+    if (user.rol === ROLE.ESTUDIANTE) {
+      if (user.id !== idEstudiante) {
+        throw new ForbiddenException('No puede ver esta excusa');
+      }
+      return;
+    }
+    if (user.rol === ROLE.ACUDIENTE) {
+      const { data, error } = await this.supabase
+        .from('acudiente_estudiante')
+        .select('id')
+        .eq('id_acudiente', user.id)
+        .eq('id_estudiante', idEstudiante)
+        .maybeSingle();
+      throwOnError(error);
+      if (!data) throw new ForbiddenException('No puede ver esta excusa');
+      return;
+    }
+    if (!hasPermission(user, PERMISSION.EXCUSA_VER)) {
+      throw new ForbiddenException('No puede ver esta excusa');
+    }
+  }
+
   private async nextRadicado() {
     const year = new Date().getFullYear();
     const prefix = `EXC-${year}-`;
@@ -125,9 +152,7 @@ export class ExcusasService {
     throwOnError(error);
     if (!data) throw new NotFoundException('Excusa no encontrada');
     const row = data as any;
-    if (user.rol === ROLE.ESTUDIANTE && row.id_estudiante !== user.id) {
-      throw new ForbiddenException('No puede ver esta excusa');
-    }
+    await this.assertPuedeVer(row.id_estudiante, user);
     const historial = await this.historial.listar('EXCUSA', id);
     const archivos = await this.archivos.listByEntidad('EXCUSA', id, user);
     return { ...row, historial, archivos };

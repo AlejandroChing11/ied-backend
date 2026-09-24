@@ -31,6 +31,10 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   SUPABASE_DB_SCHEMA?: string;
+
+  @IsOptional()
+  @IsString()
+  BOOTSTRAP_SECRET?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

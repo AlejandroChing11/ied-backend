@@ -1,4 +1,4 @@
-import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ESTADO } from '../common/constants';
 import { UsuarioRow } from '../usuarios/usuario.mapper';
@@ -72,6 +72,6 @@ describe('AuthService', () => {
     );
     await expect(
       service.login({ usuario: 'cmendoza', contrasena: 'Admin123!' }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
